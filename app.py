@@ -4,11 +4,16 @@ import m3u8
 import subprocess
 from flask import Flask, render_template_string, request
 
+
+recdic = "/media/diskA/"
+
+
 loopwget = """#!/bin/bash
 while true; do
- wget $1 -O ->> $2;
+ wget $1 -O ->> %s/$2.ts;
 done
-"""
+""" % recdic
+
 with open('/usr/local/bin/loopwget', 'w') as b:
     b.write(loopwget)
 
@@ -23,11 +28,11 @@ html = """
 <hr>
   {% for k, stream in data %}
     <form action="record">
-        <span>{{k}}</span>
+        <input type="text" readonly="readonly" name="channel" value={{k | replace(' ','_') }} size=40 >
         <input type="hidden" name="stream" value="{{stream}}">
-        <input type="text" name="time" value="21:00">
-        <input type="text" name="title" value="/media/diskA/name.ts">
-        <input type="text" name="duration" value="9000">
+        <input type="text" name="time" value="21:00" size="6">
+        <input type="text" name="title" value="name" size="30">
+        <input type="text" name="duration" value="9000" size="5">
         <input type="submit" value="record">
     </form>
     <hr>
@@ -62,7 +67,7 @@ def search():
 @app.route('/record')
 def record():
     with open("/tmp/record", 'w') as r:
-        args = [request.args.get(a, '') for a in ['stream', 'time', 'duration', 'title']]
+        args = [request.args.get(a, '') for a in ['duration', 'stream', 'title', 'time']]
         args = tuple([a.strip(' ') for a in args])
         r.write("echo 'timeout %s loopwget %s %s' | at %s" % args)
     subprocess.check_output(['sh', '/tmp/record'])
