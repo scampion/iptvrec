@@ -19,6 +19,11 @@ with open('/usr/local/bin/loopwget', 'w') as b:
 html = """
 <html>
 <body>
+<script>
+    function removeSpaces(string) {
+     return string.split(' ').join('');
+    }
+</script>
 <form action="search">
   <input type="text" name="query" >
   <input type="submit" value="Search">
@@ -28,12 +33,12 @@ html = """
     <form action="record">
         <input type="text" readonly="readonly" name="channel" value={{k | replace(' ','_') }} size=40 >
         <input type="hidden" name="stream" value="{{stream}}">
-        <input type="text" name="start" value="21:00" size="6">
-        <input type="text" name="stop" value="23:00" size="6">
+        <input type="text" name="start" value="21:00" size="6" onkeyup="this.value=removeSpaces(this.value);">
+        <input type="text" name="stop" value="23:00" size="6" onkeyup="this.value=removeSpaces(this.value);">
         {% for h, d in dates %}
             <input type="radio" name="days" value="{{d}}" {% if loop.index == 1 %}checked{% endif %}> {{h}}
         {% endfor %}
-        <input type="text" name="title" value="name" size="30">
+        <input type="text" name="title" value="name" onkeyup="this.value=removeSpaces(this.value);" size="30">
         <input type="submit" value="record">
     </form>
     <hr>
@@ -49,7 +54,7 @@ html = """
 
 
 def jobs():
-    for j, date in [l.split('\t') for l in subprocess.getoutput("atq").split('\n')]:
+    for j, date in [l.split('\t') for l in subprocess.getoutput("atq").split('\n') if l]:
         yield "%s %s" % (date, subprocess.getoutput("at -c %s" % j).split('\n')[-2])
 
 
@@ -63,7 +68,7 @@ def get_duration(start, stop):
     if int(h) <= 5:
         e += datetime.timedelta(days=1)
     e = e.replace(hour=int(h), minute=int(m))
-    return str(int((e - b).total_seconds()))
+    return int((e - b).total_seconds())
 
 app = Flask(__name__)
 
@@ -96,10 +101,9 @@ def record():
         ofile = os.path.join(recdic, request.args['title'] + ".ts")
         duration = get_duration(request.args['start'], request.args['stop'])
         args = (duration, request.args['stream'], ofile, request.args['start'], request.args['days'])
-        args = tuple([a.strip(' ') for a in args])
         r.write("echo 'timeout %s loopwget %s %s' | at %s %s\n" % args)
-        r.write("echo 'sleep %s && ffmpeg -i %s -codec:v copy -codec:a copy %s' | at %s %s\n" %
-                (duration, ofile, ofile.replace(".ts", ".mp4"), request.args['start'], request.args['days']))
+        r.write("echo 'sleep %s && ffmpeg -i %s -codec:v copy -codec:a copy %s && rm %s' | at %s %s\n" %
+                (duration, ofile, ofile.replace(".ts", ".mp4"), request.args['start'], request.args['days'], ofile))
     subprocess.check_output(['sh', '/tmp/record'])
     return "done"
 
