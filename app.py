@@ -9,9 +9,9 @@ recdic = "/media/diskA"
 
 loopwget = """#!/bin/bash
 while true; do
- wget $1 -O ->> %s/$2.ts;
+ wget $1 -O ->> $2;
 done
-""" % recdic
+"""
 
 with open('/usr/local/bin/loopwget', 'w') as b:
     b.write(loopwget)
@@ -49,9 +49,21 @@ html = """
 
 
 def jobs():
-    for j in [l.split('\t')[0] for l in subprocess.getoutput("atq").split('\n')]:
-        yield subprocess.getoutput("at -c %s" % j).split('\n')[-2]
+    for j, date in [l.split('\t') for l in subprocess.getoutput("atq").split('\n')]:
+        yield "%s %s" % (date, subprocess.getoutput("at -c %s" % j).split('\n')[-2])
 
+
+def get_duration(start, stop):
+    h, m = start.split(':')
+    b = datetime.datetime.now()
+    b = b.replace(hour=int(h), minute=int(m))
+
+    h, m = stop.split(':')
+    e = datetime.datetime.now()
+    if int(h) <= 5:
+        e += datetime.timedelta(days=1)
+    e = e.replace(hour=int(h), minute=int(m))
+    return str(int((e - b).total_seconds()))
 
 app = Flask(__name__)
 
@@ -71,7 +83,6 @@ def search():
                         yield s.title, s.uri
 
     searchword = request.args.get('query', '')
-    print(searchword)
     results = list(find(searchword))
     dates = [(datetime.datetime.now() + datetime.timedelta(days=d)) for d in range(10)]
     dates = [(d.strftime('%a %d'), d.strftime('%m/%d/%Y')) for d in dates]
@@ -80,20 +91,19 @@ def search():
 
 @app.route('/record')
 def record():
+    global recdic
     with open("/tmp/record", 'w') as r:
-        args = [request.args.get(a, '') for a in ['stop', 'stream', 'title', 'start', 'days']]
-        b = datetime.datetime.now()
-        h, m = args[3].split(':')
-        b = b.replace(hour=int(h), minute=int(m))
-        e = datetime.datetime.now()
-        h, m = args[0].split(':')
-        e = e.replace(hour=int(h), minute=int(m))
-        args[0] = str(int((e - b).total_seconds()))
+        ofile = os.path.join(recdic, request.args['title'] + ".ts")
+        duration = get_duration(request.args['start'], request.args['stop'])
+        args = (duration, request.args['stream'], ofile, request.args['start'], request.args['days'])
         args = tuple([a.strip(' ') for a in args])
-        print(args)
-        r.write("echo 'timeout %s loopwget %s %s' | at %s %s" % args)
+        r.write("echo 'timeout %s loopwget %s %s' | at %s %s\n" % args)
+        r.write("echo 'sleep %s && ffmpeg -i %s -codec:v copy -codec:a copy %s' | at %s %s\n" %
+                (duration, ofile, ofile.replace(".ts", ".mp4"), request.args['start'], request.args['days']))
     subprocess.check_output(['sh', '/tmp/record'])
     return "done"
+
+
 
 
 if __name__ == '__main__':
