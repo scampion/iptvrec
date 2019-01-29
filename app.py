@@ -103,11 +103,9 @@ def record():
         args = (duration, request.args['stream'], ofile, request.args['start'], request.args['days'])
         r.write("echo 'timeout %s loopwget %s %s' | at %s %s\n" % args)
         r.write("echo 'sleep %s && ffmpeg -i %s -codec:v copy -codec:a copy %s && rm %s' | at %s %s\n" %
-                (duration, ofile, ofile.replace(".ts", ".mp4"), request.args['start'], request.args['days'], ofile))
+                (duration, ofile, ofile.replace(".ts", ".mp4"), ofile, request.args['start'], request.args['days']))
     subprocess.check_output(['sh', '/tmp/record'])
     return "done"
-
-
 
 
 if __name__ == '__main__':
